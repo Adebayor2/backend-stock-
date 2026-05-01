@@ -13,18 +13,6 @@ const Token = require ('../models/tokenModel')
         return res.status(400).send('all inputs are required');
     }
 
-    let userRole = "user";
-    if (req.body.role    === "admin") {
-      if (req.body.adminSecret !== process.env.ADMIN_SECRET) {
-        return res.status(403).send("Invalid admin secret");
-      }
-      userRole = "admin";
-    }
-
-
-
-
-
     let salt = bcrypt.genSaltSync(10);
     let hashedPassword = bcrypt.hashSync(req.body.password, salt);
     req.body.password = hashedPassword;
