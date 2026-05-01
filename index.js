@@ -1,0 +1,24 @@
+const express = require ('express')
+const cors = require ('cors')
+const app = express ()
+const dotenv = require ('dotenv')
+const mongoose = require ('mongoose')
+const cookieParser = require ('cookie-parser')
+dotenv.config ()
+const PORT = process.env.PORT
+const URI = process.env.MONGODB_URI
+
+app.use (cors())
+app.use(express.json())
+app.use(cookieParser())
+app.use(express.urlencoded({extended:true}));
+const userRoute = require('./routes/user.route')
+const adminRoute = require('./routes/adminRoute')
+mongoose.connect(URI)
+.then(()=>console.log('connected to mongoDB'))
+.catch((err) => console.log('error connecting to mongodb', err))
+app.listen( PORT, () => {
+    console.log(`server is running on port ${PORT}`)
+});
+app.use("/api",userRoute)
+app.use('/api/admin', adminRoute);
