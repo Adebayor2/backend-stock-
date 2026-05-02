@@ -6,68 +6,85 @@ dotenv.config()
 const jwtSecret = process.env.JWT_SECRET
 const crypto = require ('crypto')
 const Token = require ('../models/tokenModel')
+const sendEmail = require('../utils/sendEmail')
 
 
- const userSignup = (req, res) => {
-    if (!req.body) {
-        return res.status(400).send('all inputs are required');
+ const userSignup = async (req, res) => {
+    try {
+        const { email, password, firstName, lastName } = req.body;
+        if (!email || !password || !firstName || !lastName) {
+            return res.status(400).json({ message: 'All inputs are required' });
+        }
+
+        const normalizedEmail = email.trim().toLowerCase();
+        
+        // Check if user already exists
+        const userExists = await mainUser.findOne({ email: normalizedEmail });
+        if (userExists) {
+            return res.status(409).json({ message: 'User already exists' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        
+        const newUser = new mainUser({
+            ...req.body,
+            email: normalizedEmail,
+            password: hashedPassword
+        });
+
+        await newUser.save();
+        console.log('User saved to database');
+        return res.status(201).json({ message: 'User signed up successfully' });
+    } catch (err) {
+        console.error('Error signing user up:', err);
+        return res.status(500).json({ message: 'Internal server error' });
     }
-
-    let salt = bcrypt.genSaltSync(10);
-    let hashedPassword = bcrypt.hashSync(req.body.password, salt);
-    req.body.password = hashedPassword;
-    const user = req.body;
-    const newUser = new mainUser(user);
-    newUser.save()
-    .then(() => {
-        console.log('user saved to database');
-        return res.status(201).send('user signedup successfully');
-      
-    })
-    .catch((err) => {
-        console.log('error signing user in', err);
-
-        res.status(500).send('Internal server error');
-    });
- }
+}
 
  
- const userSignin = (req,res ) =>{
-    const {email, password} =req.body
-    if (!email || !password){
-    return  res.status(400).send('all inputs are required')
-};
+ const userSignin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ message: 'Email and password are required' });
+        }
 
- mainUser.findOne({email}) 
- .then((foundUser) =>{
-    if (!foundUser){
-        return res.status(409).send('Invalid password or email')
+        const normalizedEmail = email.trim().toLowerCase();
+        const foundUser = await mainUser.findOne({ email: normalizedEmail });
+
+        if (!foundUser) {
+            return res.status(401).json({ message: 'Invalid password or email' });
+        }
+
+        const matchedPassword = await bcrypt.compare(password, foundUser.password);
+
+        if (!matchedPassword) {
+            return res.status(401).json({ message: 'Invalid password or email' });
+        }
+
+        const token = jwt.sign(
+            { id: foundUser._id, email: foundUser.email, role: foundUser.role },
+            jwtSecret,
+            { expiresIn: '1h' }
+        );
+
+        console.log("Generated Token:", token);
+
+        return res.status(200).json({
+            message: 'Login successful',
+            id: foundUser._id,
+            email: foundUser.email,
+            firstName: foundUser.firstName,
+            lastName: foundUser.lastName,
+            role: foundUser.role,
+            token
+        });
+    } catch (error) {
+        console.error("Login Error:", error);
+        return res.status(500).json({ message: 'Internal server error' });
     }
-   const  matchedPassword = bcrypt.compareSync(password,foundUser.password)
-
-   if (!matchedPassword){
-    return res.status(409).send('Invalid password or email')
-   }
-   else {
-          const token = jwt.sign({ id: foundUser._id, email: foundUser.email, role: foundUser.role }, jwtSecret, { expiresIn: '1h' });
-            console.log("Generated Token:", token);
-    res.status(200).json({ message:
-       'Login successful',
-       id: foundUser._id,
-       email: foundUser.email,
-       firstName: foundUser.firstName,
-       lastName: foundUser.lastName,
-       role:foundUser.role,
-        token });
-   }
- })
- .catch((error)=> {
-    console.log(error)
-    res.status(500).send('Internal server error')
-
- })
-
- }
+}
   const getDashboard = (req, res) => {
     const { email, role } = req.user;
     
@@ -118,7 +135,9 @@ const Token = require ('../models/tokenModel')
    })
  }
    const loginStatus = (req, res) => {
-      const token = req.token;
+      const authHeader = req.headers.authorization;
+      const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+      
       if (!token){
          return res.json(false);
       }
@@ -134,7 +153,7 @@ const Token = require ('../models/tokenModel')
       }
    }
    const updateUser = (req, res) => {
-      mainUser.findById(req.user._id)
+      mainUser.findById(req.user.id)
       .then((user) => {   
          if (!user) {
              return res.status(404).json({ message: 'user not found' });
@@ -168,7 +187,7 @@ const Token = require ('../models/tokenModel')
          });
       } 
       
-      mainUser.findById(req.user._id)
+      mainUser.findById(req.user.id)
       .then((user) => {
           if (!user){
              return res.status(404).json({
