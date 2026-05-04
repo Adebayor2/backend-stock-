@@ -116,24 +116,26 @@ const sendEmail = require('../utils/sendEmail')
  return res.status(200).json({message:"logout successful"})
  }
 
- const userProfile = (req, res) => {
-   mainUser.findOne({ email: req.user.email })
-   .then(user => {
-    if (!user){
-     return res.status(404).send('User not found')
+ const userProfile = async (req, res) => {
+    try {
+        const user = await mainUser.findById(req.user.id);
+        if (!user) {
+            return res.status(404).send('User not found');
+        }
+        res.status(200).json({
+            user: {
+                _id: user._id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+            }
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500).send('Internal server error');
     }
-    res.status(200).json({
-     _id: user._id,
-     email: user.email,
-     firstName: user.firstName,
-     lastName: user.lastName,
-    })
-   })
-   .catch(error => {
-    console.log(error)
-    res.status(500).send('Internal server error')
-   })
- }
+}
    const loginStatus = (req, res) => {
       const authHeader = req.headers.authorization;
       const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
@@ -171,11 +173,11 @@ const sendEmail = require('../utils/sendEmail')
              });
          })
          .catch((err) => {
-             res.status(500).json({ message: 'error saving user' });
+             res.status(500).json({ message: 'error saving user',err });
          });
       })
       .catch((error)=> {
-         res.status(500).json({ message: 'error updating user' });
+         res.status(500).json({ message: 'error updating user', error });
       });
    }
 
