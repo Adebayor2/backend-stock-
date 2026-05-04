@@ -302,4 +302,13 @@ const sendEmail = require('../utils/sendEmail')
           res.status(500).send('Internal server error');
       });
    }
- module.exports = {userSignup,userSignin, userLogout, userProfile, loginStatus, updateUser, changePassword, forgotPassword, resetPassword, getDashboard}
+   const getAllUsers = async (req, res) => {
+      try {
+          const users = await mainUser.find({}).select("-password");
+          res.status(200).json(users);
+      } catch (error) {
+          console.error("Error fetching all users:", error);
+          res.status(500).json({ message: "Internal server error" });
+      }
+   }
+ module.exports = {userSignup,userSignin, userLogout, userProfile, loginStatus, updateUser, changePassword, forgotPassword, resetPassword, getDashboard, getAllUsers}

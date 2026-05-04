@@ -14,6 +14,8 @@ app.use(cookieParser())
 app.use(express.urlencoded({extended:true}));
 const userRoute = require('./routes/user.route')
 const adminRoute = require('./routes/adminRoute')
+const categoryRoute = require('./routes/categoryRoute')
+const productRoute = require('./routes/productRoute')
 mongoose.connect(URI)
 .then(()=>console.log('connected to mongoDB'))
 .catch((err) => console.log('error connecting to mongodb', err))
@@ -22,3 +24,5 @@ app.listen( PORT, () => {
 });
 app.use("/api",userRoute)
 app.use('/api/admin', adminRoute);
+app.use('/api/categories', categoryRoute);
+app.use('/api/products', productRoute);
