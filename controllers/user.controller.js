@@ -46,6 +46,8 @@ const sendEmail = require('../utils/sendEmail')
  const userSignin = async (req, res) => {
     try {
         const { email, password } = req.body;
+        console.log("Signin attempt for email:", email);
+        
         if (!email || !password) {
             return res.status(400).json({ message: 'Email and password are required' });
         }
@@ -54,22 +56,32 @@ const sendEmail = require('../utils/sendEmail')
         const foundUser = await mainUser.findOne({ email: normalizedEmail });
 
         if (!foundUser) {
+            console.log("User not found in database:", normalizedEmail);
             return res.status(401).json({ message: 'Invalid password or email' });
         }
 
+        console.log("User found:", { id: foundUser._id, role: foundUser.role, hasPassword: !!foundUser.password });
+        console.log("Comparing passwords...");
         const matchedPassword = await bcrypt.compare(password, foundUser.password);
 
         if (!matchedPassword) {
+            console.log("Password mismatch for user:", normalizedEmail);
             return res.status(401).json({ message: 'Invalid password or email' });
         }
 
+        if (!jwtSecret) {
+            console.error("JWT_SECRET is missing from environment variables!");
+            return res.status(500).json({ message: 'Server configuration error' });
+        }
+
+        console.log("Password matched, generating token...");
         const token = jwt.sign(
             { id: foundUser._id, email: foundUser.email, role: foundUser.role },
             jwtSecret,
             { expiresIn: '1h' }
         );
 
-        console.log("Generated Token:", token);
+        console.log("Login successful for:", normalizedEmail);
 
         return res.status(200).json({
             message: 'Login successful',
@@ -81,8 +93,8 @@ const sendEmail = require('../utils/sendEmail')
             token
         });
     } catch (error) {
-        console.error("Login Error:", error);
-        return res.status(500).json({ message: 'Internal server error' });
+        console.error("Login Error details:", error);
+        return res.status(500).json({ message: 'Internal server error', error: error.message });
     }
 }
   const getDashboard = (req, res) => {
