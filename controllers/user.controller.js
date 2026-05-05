@@ -97,10 +97,13 @@ const sendEmail = require('../utils/sendEmail')
             res.json({ 
                 message: `welcome to your dashboard ${user.role}`, 
                 user: { 
+                    id: user._id,
                     email: user.email,
                     firstName: user.firstName,
                     lastName: user.lastName,
-                    role: user.role
+                    role: user.role,
+                    phone: user.phone,
+                    address: user.address
                 } 
             });
         })
@@ -129,6 +132,8 @@ const sendEmail = require('../utils/sendEmail')
                 firstName: user.firstName,
                 lastName: user.lastName,
                 role: user.role,
+                phone: user.phone,
+                address: user.address,
             }
         });
     } catch (error) {
@@ -162,6 +167,8 @@ const sendEmail = require('../utils/sendEmail')
          }
          user.firstName = req.body.firstName || user.firstName;
          user.lastName = req.body.lastName || user.lastName;
+         user.phone = req.body.phone || user.phone;
+         user.address = req.body.address || user.address;
 
          user.save()
          .then((updatedUser) => {
@@ -170,6 +177,8 @@ const sendEmail = require('../utils/sendEmail')
                  email: updatedUser.email, 
                  firstName: updatedUser.firstName,
                  lastName: updatedUser.lastName,
+                 phone: updatedUser.phone,
+                 address: updatedUser.address
              });
          })
          .catch((err) => {
@@ -254,7 +263,7 @@ const sendEmail = require('../utils/sendEmail')
 
                   try {
                       if (typeof sendEmail === 'function') {
-                          sendEmail(subject, message, send_to, sent_from);
+                          sendEmail(subject, send_to, message, sent_from);
                       } else {
                           console.log("sendEmail is not defined. Email content:", message);
                       }

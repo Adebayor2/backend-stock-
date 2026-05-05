@@ -17,8 +17,8 @@ const adminRoute = require('./routes/adminRoute')
 const categoryRoute = require('./routes/categoryRoute')
 const productRoute = require('./routes/productRoute')
 mongoose.connect(URI)
-.then(()=>console.log('connected to mongoDB'))
-.catch((err) => console.log('error connecting to mongodb', err))
+.then(() => console.log("Connected to MongoDB successfully"))
+.catch((err) => console.error("MongoDB connection error:", err));
 app.listen( PORT, () => {
     console.log(`server is running on port ${PORT}`)
 });
