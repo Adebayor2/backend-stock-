@@ -190,72 +190,61 @@ const Category = require('../models/category');
          return res.json(false);
       }
    }
-   const updateUser = (req, res) => {
-      mainUser.findById(req.user.id)
-      .then((user) => {   
-         if (!user) {
-             return res.status(404).json({ message: 'user not found' });
-         }
-         user.firstName = req.body.firstName || user.firstName;
-         user.lastName = req.body.lastName || user.lastName;
-         user.phone = req.body.phone || user.phone;
-         user.address = req.body.address || user.address;
+   const updateUser = async (req, res) => {
+      try {
+          const user = await mainUser.findById(req.user.id);
+          if (!user) {
+              return res.status(404).json({ message: 'User not found' });
+          }
 
-         user.save()
-         .then((updatedUser) => {
-             res.json({
-                 _id: updatedUser._id,
-                 email: updatedUser.email, 
-                 firstName: updatedUser.firstName,
-                 lastName: updatedUser.lastName,
-                 phone: updatedUser.phone,
-                 address: updatedUser.address
-             });
-         })
-         .catch((err) => {
-             res.status(500).json({ message: 'error saving user',err });
-         });
-      })
-      .catch((error)=> {
-         res.status(500).json({ message: 'error updating user', error });
-      });
-   }
+          user.firstName = req.body.firstName || user.firstName;
+          user.lastName = req.body.lastName || user.lastName;
+          user.phone = req.body.phone || user.phone;
+          user.address = req.body.address || user.address;
 
-   const changePassword = (req, res) => {
-      const {oldPassword, password} = req.body;
-      if (!oldPassword || !password){
-         return res.status(400).json({
-            message: "add old password and new password" 
-         });
-      } 
-      
-      mainUser.findById(req.user.id)
-      .then((user) => {
-          if (!user){
-             return res.status(404).json({
-                message: 'user not found'
-             });
+          const updatedUser = await user.save();
+          res.status(200).json({
+              _id: updatedUser._id,
+              email: updatedUser.email,
+              firstName: updatedUser.firstName,
+              lastName: updatedUser.lastName,
+              phone: updatedUser.phone,
+              address: updatedUser.address,
+              message: "Profile updated successfully"
+          });
+      } catch (error) {
+          console.error("Update User Error:", error);
+          res.status(500).json({ message: 'Error updating user profile', error: error.message });
+      }
+   };
+
+   const changePassword = async (req, res) => {
+      try {
+          const { oldPassword, password } = req.body;
+          if (!oldPassword || !password) {
+              return res.status(400).json({ message: "Old and new passwords are required" });
           }
-          
-          const passwordIsCorrect = bcrypt.compareSync(oldPassword, user.password);
-          if (passwordIsCorrect) {
-             user.password = bcrypt.hashSync(password, bcrypt.genSaltSync(10));
-             user.save()
-             .then(() => {
-                 res.status(200).send('password changed successfully');
-             })
-             .catch((err) => {
-                 res.status(500).send('error saving new password');
-             });
+
+          const user = await mainUser.findById(req.user.id);
+          if (!user) {
+              return res.status(404).json({ message: 'User not found' });
           }
-          else{
-             res.status(400).send('old password is incorrect');
+
+          const passwordIsCorrect = await bcrypt.compare(oldPassword, user.password);
+          if (!passwordIsCorrect) {
+              return res.status(400).json({ message: 'Old password is incorrect' });
           }
-      })
-      .catch((err) => {
-          res.status(500).send('internal server error');
-      });
-   }
+
+          const salt = await bcrypt.genSalt(10);
+          user.password = await bcrypt.hash(password, salt);
+          await user.save();
+
+          res.status(200).json({ message: 'Password changed successfully' });
+      } catch (error) {
+          console.error("Change Password Error:", error);
+          res.status(500).json({ message: 'Internal server error' });
+      }
+   };
    const forgotPassword = (req, res) => {
       const {email} = req.body;
       mainUser.findOne({email})
