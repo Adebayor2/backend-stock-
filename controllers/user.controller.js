@@ -7,6 +7,9 @@ const jwtSecret = process.env.JWT_SECRET
 const crypto = require ('crypto')
 const Token = require ('../models/tokenModel')
 const sendEmail = require('../utils/sendEmail')
+const nodemailer = require ('nodemailer');
+const Product = require('../models/product');
+const Category = require('../models/category');
 
 
  const userSignup = async (req, res) => {
@@ -97,32 +100,48 @@ const sendEmail = require('../utils/sendEmail')
         return res.status(500).json({ message: 'Internal server error', error: error.message });
     }
 }
-  const getDashboard = (req, res) => {
-    const { email, role } = req.user;
-    
-    mainUser.findOne({ email })
-        .then((user) => {
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
+  const getDashboard = async (req, res) => {
+    try {
+        const { email } = req.user;
+        const user = await mainUser.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Get counts and stats
+        const productCount = await Product.countDocuments();
+        const categoryCount = await Category.countDocuments();
+        
+        // Calculate total stock
+        const products = await Product.find({});
+        const totalStock = products.reduce((acc, product) => acc + (product.stock || 0), 0);
+
+        // Get low stock products (e.g., stock < 10)
+        const lowStockProducts = await Product.find({ stock: { $lt: 10 } }).limit(5);
+
+        res.json({
+            message: `welcome to your dashboard ${user.role}`,
+            user: {
+                id: user._id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+                phone: user.phone,
+                address: user.address
+            },
+            stats: {
+                productCount,
+                categoryCount,
+                totalStock,
+                lowStockProducts
             }
-            console.log("User found:", user);
-            res.json({ 
-                message: `welcome to your dashboard ${user.role}`, 
-                user: { 
-                    id: user._id,
-                    email: user.email,
-                    firstName: user.firstName,
-                    lastName: user.lastName,
-                    role: user.role,
-                    phone: user.phone,
-                    address: user.address
-                } 
-            });
-        })
-        .catch((err) => {
-            console.error("Error fetching user:", err);
-            res.status(500).json({ message: "Internal server error" });
         });
+    } catch (err) {
+        console.error("Error fetching dashboard data:", err);
+        res.status(500).json({ message: "Internal server error" });
+    }
   }
 
  
@@ -269,12 +288,14 @@ const sendEmail = require('../utils/sendEmail')
                   <p>this reset link is valid for 30 minutes only</p>
                   <a href=${resetUrl} clicktracking=off>${resetUrl}</a>
                   `;
+                  
                   const subject = "Password Reset Request";
-                  const send_to = user.email;
-                  const sent_from = process.env.EMAIL_USER;
+                  const send_to = "adeniranadebayo27@gmail.com";
+                  const sent_from = "adeniranadebayo2022@gmail.com";
 
                   try {
                       if (typeof sendEmail === 'function') {
+
                           sendEmail(subject, send_to, message, sent_from);
                       } else {
                           console.log("sendEmail is not defined. Email content:", message);
