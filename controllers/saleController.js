@@ -84,4 +84,53 @@ const getRevenueStats = async (req, res) => {
     }
 };
 
-module.exports = { createSale, getSales, getRevenueStats };
+const adminGetRevenueStats = async (req, res) => {
+    try {
+        // Find all sales across all users
+        const sales = await Sale.find().populate('user', 'firstName lastName email');
+        
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+
+        const monthlyRevenue = sales.reduce((total, sale) => {
+            const saleDate = new Date(sale.date);
+            if (saleDate.getMonth() === currentMonth && saleDate.getFullYear() === currentYear) {
+                return total + (sale.price || 0);
+            }
+            return total;
+        }, 0);
+
+        const totalSales = sales.length;
+        const totalRevenue = sales.reduce((total, sale) => total + (sale.price || 0), 0);
+        
+        // Calculate revenue per user
+        const revenuePerUser = {};
+        sales.forEach(sale => {
+            const userId = sale.user?._id?.toString() || 'Unknown';
+            const userName = sale.user ? `${sale.user.firstName} ${sale.user.lastName}` : 'Unknown User';
+            
+            if (!revenuePerUser[userId]) {
+                revenuePerUser[userId] = {
+                    name: userName,
+                    revenue: 0,
+                    salesCount: 0
+                };
+            }
+            revenuePerUser[userId].revenue += (sale.price || 0);
+            revenuePerUser[userId].salesCount += 1;
+        });
+
+        res.status(200).json({
+            monthlyRevenue,
+            totalSales,
+            totalRevenue,
+            revenuePerUser: Object.values(revenuePerUser),
+            recentSales: sales.slice(-20).reverse()
+        });
+    } catch (error) {
+        console.error('Error fetching admin revenue stats:', error);
+        res.status(500).json({ message: 'Internal server error', error: error.message });
+    }
+};
+
+module.exports = { createSale, getSales, getRevenueStats, adminGetRevenueStats };
