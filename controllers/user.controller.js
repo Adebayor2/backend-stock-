@@ -281,7 +281,8 @@ const Category = require('../models/category');
                  expiresAt: Date.now() + 30 * (60 * 1000)  // 30 minutes
               }).save()
               .then(() => {
-                  const resetUrl = `${process.env.FRONTEND_URL}/resetpassword/${resetToken}`;
+                  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+                  const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
                   const message = `
                   <h2>Hello ${user.firstName}</h2>
                   <p>please use the url below to reset your password</p>
@@ -290,8 +291,8 @@ const Category = require('../models/category');
                   `;
                   
                   const subject = "Password Reset Request";
-                  const send_to = "adeniranadebayo27@gmail.com";
-                  const sent_from = "adeniranadebayo2022@gmail.com";
+                  const send_to = user.email;
+                  const sent_from = process.env.EMAIL_USER || "adeniranadebayo2022@gmail.com";
 
                   try {
                       if (typeof sendEmail === 'function') {

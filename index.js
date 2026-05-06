@@ -16,6 +16,7 @@ const userRoute = require('./routes/user.route')
 const adminRoute = require('./routes/adminRoute')
 const categoryRoute = require('./routes/categoryRoute')
 const productRoute = require('./routes/productRoute')
+const salesRoute = require('./routes/salesRoute')
 mongoose.connect(URI)
 .then(() => console.log("Connected to MongoDB successfully"))
 .catch((err) => console.error("MongoDB connection error:", err));
@@ -26,3 +27,4 @@ app.use("/api",userRoute)
 app.use('/api/admin', adminRoute);
 app.use('/api/categories', categoryRoute);
 app.use('/api/products', productRoute);
+app.use('/api/sales', salesRoute);
