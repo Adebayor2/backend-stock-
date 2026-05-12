@@ -197,6 +197,14 @@ const Category = require('../models/category');
               return res.status(404).json({ message: 'User not found' });
           }
 
+          if (req.body.email && req.body.email !== user.email) {
+              const emailExists = await mainUser.findOne({ email: req.body.email.trim().toLowerCase() });
+              if (emailExists) {
+                  return res.status(400).json({ message: 'Email already in use' });
+              }
+              user.email = req.body.email.trim().toLowerCase();
+          }
+
           user.firstName = req.body.firstName || user.firstName;
           user.lastName = req.body.lastName || user.lastName;
           user.phone = req.body.phone || user.phone;
@@ -245,90 +253,82 @@ const Category = require('../models/category');
           res.status(500).json({ message: 'Internal server error' });
       }
    };
-   const forgotPassword = (req, res) => {
-      const {email} = req.body;
-      mainUser.findOne({email})
-      .then((user) => {
-          if (!user){
-             return res.status(400).send('user does not exist');
+   const forgotPassword = async (req, res) => {
+      try {
+          const { email } = req.body;
+          const user = await mainUser.findOne({ email });
+          if (!user) {
+              return res.status(400).send('user does not exist');
           }
-          
-          Token.findOne({userId: user._id})
-          .then((token) => {
-              if (token) {
-                 return token.deleteOne();
-              }
-          })
-          .then(() => {
-              let resetToken = crypto.randomBytes(32).toString('hex') + user._id;
-              const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-              
-              new Token ({
-                 userId: user._id,
-                 token: hashedToken,
-                 createdAt: Date.now(),
-                 expiresAt: Date.now() + 30 * (60 * 1000)  // 30 minutes
-              }).save()
-              .then(() => {
-                  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-                  const resetUrl = `${frontendUrl}/reset-password${hashedToken}`;
-                  const message = `
-                  <h2>Hello ${user.firstName}</h2>
-                  <p>please use the url below to reset your password</p>
-                  <p>this reset link is valid for 30 minutes only</p>
-                  <a href=${resetUrl} clicktracking=off>${resetUrl}</a>
-                  `;
-                  
-                  const subject = "Password Reset Request";
-                  const send_to = user.email;
-                  const sent_from = process.env.EMAIL_USER;
 
-                  sendEmail (subject, send_to, message, sent_from)
-                  .then (() => {
-                    res.status(200).json({success: true, message: 'Reset email sent'});
-                  })
-                  .catch (() => {
-                      res.status(500).send("email not sent try again");
-                  })
-              });
-          });   
-      }) 
-      .catch((err) => {
-          console.log("error");
+          // Delete any existing token
+          await Token.findOneAndDelete({ userId: user._id });
+
+          // Create reset token
+          let resetToken = crypto.randomBytes(32).toString('hex') + user._id;
+          const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+          // Save token to DB
+          await new Token({
+              userId: user._id,
+              token: hashedToken,
+              createdAt: Date.now(),
+              expiresAt: Date.now() + 30 * (60 * 1000)  // 30 minutes
+          }).save();
+
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+          const resetUrl = `${frontendUrl}/reset-password/:resetToken${resetToken}`;
+          const message = `
+          <h2>Hello ${user.firstName}</h2>
+          <p>please use the url below to reset your password</p>
+          <p>this reset link is valid for 30 minutes only</p>
+          <a href=${resetUrl} clicktracking=off>${resetUrl}</a>
+          `;
+
+          const subject = "Password Reset Request";
+          const send_to = user.email;
+          const sent_from = process.env.EMAIL_USER;
+
+          await sendEmail(subject, send_to, message, sent_from);
+          res.status(200).json({ success: true, message: 'Reset email sent' });
+      } catch (err) {
+          console.error("Forgot Password Error:", err);
           res.status(500).send('internal server error');
-      });
+      }
    }
 
+   const resetPassword = async (req, res) => {
+      try {
+          const { password } = req.body;
+          const { resetToken } = req.params;
+          const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
 
-   const resetPassword = (req, res) => {
-      const {password} = req.body;
-      const {resetToken} = req.params;
-      const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+          const userToken = await Token.findOne({
+              token: hashedToken,
+              expiresAt: { $gt: Date.now() }
+          });
 
-      Token.findOne({
-         token: hashedToken,
-         expiresAt: {$gt: Date.now()}
-      })
-      .then((userToken) => {
           if (!userToken) {
-             return res.status(400).send('Invalid or expired token');
+              return res.status(400).send('Invalid or expired token');
           }
 
-          mainUser.findOne({_id: userToken.userId})
-          .then((user) => {
-              if (!user) {
-                  return res.status(404).send('User not found');
-              }
-              user.password = bcrypt.hashSync(password, bcrypt.genSaltSync(10));
-              user.save()
-              .then(() => {
-                  res.status(201).json({message: 'password reset successful'});
-              });
-          });
-      })
-      .catch((err) => {
+          const user = await mainUser.findOne({ _id: userToken.userId });
+          if (!user) {
+              return res.status(404).send('User not found');
+          }
+
+          const salt = await bcrypt.genSalt(10);
+          user.password = await bcrypt.hash(password, salt);
+          await user.save();
+
+          // Delete the token after use
+          await userToken.deleteOne();
+
+          res.status(200).json({ message: 'password reset successful' });
+      } catch (err) {
+          console.error("Reset Password Error:", err);
           res.status(500).send('Internal server error');
-      });
+      }
    }
    const getAllUsers = async (req, res) => {
       try {
