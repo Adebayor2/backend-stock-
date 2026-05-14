@@ -8,7 +8,7 @@ dotenv.config ()
 const PORT = process.env.PORT
 const URI = process.env.MONGODB_URI
 
-app.use (cors( {origin:[ 'https://stock-management-app-taupe.vercel.app', 'http://localhost:5173', 'http://127.0.0.1:5173']} ))
+app.use (cors( {origin:[ 'https://frontend-five-sage-93.vercel.app', 'http://localhost:5173', 'http://127.0.0.1:5173']} ))
 app.use(express.json())
 app.use(cookieParser())
 app.use(express.urlencoded({extended:true}));
