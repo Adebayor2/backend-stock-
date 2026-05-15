@@ -287,7 +287,7 @@ const Category = require('../models/category');
 
           const subject = "Password Reset Request";
           const send_to = user.email;
-          const sent_from = process.env.EMAIL_USER;
+          const sent_from = process.env.SMTP_USER;
 
           await sendEmail(subject, send_to, message, sent_from);
           res.status(200).json({ success: true, message: 'Reset email sent' });
