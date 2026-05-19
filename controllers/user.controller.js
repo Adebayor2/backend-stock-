@@ -277,7 +277,7 @@ const Category = require('../models/category');
           }).save();
 
           const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-          const resetUrl = `${frontendUrl}/reset-password/:resetToken${resetToken}`;
+          const resetUrl = `${frontendUrl}#/reset-password/:resetToken${resetToken}`;
           const message = `
           <h2>Hello ${user.firstName}</h2>
           <p>please use the url below to reset your password</p>
@@ -287,7 +287,7 @@ const Category = require('../models/category');
 
           const subject = "Password Reset Request";
           const send_to = user.email;
-          const sent_from = process.env.SMTP_USER;
+          const sent_from = process.env.EMAIL_USER;
 
           await sendEmail(subject, send_to, message, sent_from);
           res.status(200).json({ success: true, message: 'Reset email sent' });

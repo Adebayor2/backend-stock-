@@ -6,8 +6,9 @@ dotenv.config();
 
 const sendEmail = async ( subject, send_to, message , sent_from, ) => {
   const transporter = nodemailer.createTransport({
-    smtp_host: 'smtp-relay.brevo.com',
+    host: 'smtp-relay.brevo.com',
     port:587,  
+    secure:false,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS
@@ -32,3 +33,4 @@ const sendEmail = async ( subject, send_to, message , sent_from, ) => {
 };
 
 module.exports = sendEmail;
+
