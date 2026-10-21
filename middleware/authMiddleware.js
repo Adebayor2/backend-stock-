@@ -5,8 +5,13 @@ dotenv.config()
 const jwt = require ('jsonwebtoken')
 
 const protect = (req, res, next) => {
+  if (!process.env.JWT_SECRET) {
+    console.error("JWT_SECRET is not configured")
+    return res.status(500).json({ message: "Server configuration error" })
+  }
+
   let token;
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')){
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')){
     token = req.headers.authorization.split(' ')[1]
   }
     if (!token){
@@ -25,4 +30,3 @@ const protect = (req, res, next) => {
 }
 
 module.exports = protect
-

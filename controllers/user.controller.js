@@ -7,19 +7,26 @@ const jwtSecret = process.env.JWT_SECRET
 const crypto = require ('crypto')
 const Token = require ('../models/tokenModel')
 const sendEmail = require('../utils/sendEmail')
-const nodemailer = require ('nodemailer');
 const Product = require('../models/product');
 const Category = require('../models/category');
 
 
  const userSignup = async (req, res) => {
     try {
-        const { email, password, firstName, lastName } = req.body;
-        if (!email || !password || !firstName || !lastName) {
-            return res.status(400).json({ message: 'All inputs are required' });
+        const { email, password, firstName, lastName } = req.body || {};
+        if (
+            typeof email !== 'string' || !email.trim() ||
+            typeof password !== 'string' || password.length < 6 ||
+            typeof firstName !== 'string' || !firstName.trim() ||
+            typeof lastName !== 'string' || !lastName.trim()
+        ) {
+            return res.status(400).json({ message: 'Enter a valid name, email, and password of at least 6 characters' });
         }
 
         const normalizedEmail = email.trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+            return res.status(400).json({ message: 'Enter a valid email address' });
+        }
         
         // Check if user already exists
         const userExists = await mainUser.findOne({ email: normalizedEmail });
@@ -31,27 +38,30 @@ const Category = require('../models/category');
         const hashedPassword = await bcrypt.hash(password, salt);
         
         const newUser = new mainUser({
-            ...req.body,
             email: normalizedEmail,
-            password: hashedPassword
+            password: hashedPassword,
+            firstName: firstName.trim(),
+            lastName: lastName.trim()
         });
 
         await newUser.save();
         console.log('User saved to database');
-        return res.status(201).json({ message: 'User signed up successfully' });
+        return res.status(201).json({ success: true, message: 'User signed up successfully' });
     } catch (err) {
         console.error('Error signing user up:', err);
-        return res.status(500).json({ message: 'Internal server error' });
+        if (err.code === 11000) {
+            return res.status(409).json({ message: 'User already exists' });
+        }
+        return res.status(500).json({ success: false, message: 'Internal server error' });
     }
 }
 
  
  const userSignin = async (req, res) => {
     try {
-        const { email, password } = req.body;
-        console.log("Signin attempt for email:", email);
+        const { email, password } = req.body || {};
         
-        if (!email || !password) {
+        if (typeof email !== 'string' || !email.trim() || typeof password !== 'string' || !password) {
             return res.status(400).json({ message: 'Email and password are required' });
         }
 
@@ -59,16 +69,12 @@ const Category = require('../models/category');
         const foundUser = await mainUser.findOne({ email: normalizedEmail });
 
         if (!foundUser) {
-            console.log("User not found in database:", normalizedEmail);
             return res.status(401).json({ message: 'Invalid password or email' });
         }
 
-        console.log("User found:", { id: foundUser._id, role: foundUser.role, hasPassword: !!foundUser.password });
-        console.log("Comparing passwords...");
         const matchedPassword = await bcrypt.compare(password, foundUser.password);
 
         if (!matchedPassword) {
-            console.log("Password mismatch for user:", normalizedEmail);
             return res.status(401).json({ message: 'Invalid password or email' });
         }
 
@@ -77,14 +83,11 @@ const Category = require('../models/category');
             return res.status(500).json({ message: 'Server configuration error' });
         }
 
-        console.log("Password matched, generating token...");
         const token = jwt.sign(
             { id: foundUser._id, email: foundUser.email, role: foundUser.role },
             jwtSecret,
             { expiresIn: '1h' }
         );
-
-        console.log("Login successful for:", normalizedEmail);
 
         return res.status(200).json({
             message: 'Login successful',
@@ -97,25 +100,24 @@ const Category = require('../models/category');
         });
     } catch (error) {
         console.error("Login Error details:", error);
-        return res.status(500).json({ message: 'Internal server error', error: error.message });
+        return res.status(500).json({ message: 'Internal server error' });
     }
 }
   const getDashboard = async (req, res) => {
     try {
-        const { email } = req.user;
-        const user = await mainUser.findOne({ email });
+        const user = await mainUser.findById(req.user.id);
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
         // Get counts and stats
-        const productCount = await Product.countDocuments();
-        const categoryCount = await Category.countDocuments();
-        
-        // Calculate total stock
-        const products = await Product.find({});
-        const totalStock = products.reduce((acc, product) => acc + (product.stock || 0), 0);
+        const [productCount, categoryCount, stockSummary] = await Promise.all([
+            Product.countDocuments(),
+            Category.countDocuments(),
+            Product.aggregate([{ $group: { _id: null, totalStock: { $sum: '$stock' } } }])
+        ]);
+        const totalStock = stockSummary[0]?.totalStock || 0;
 
         // Get low stock products (e.g., stock < 10)
         const lowStockProducts = await Product.find({ stock: { $lt: 10 } }).limit(5);
@@ -197,18 +199,36 @@ const Category = require('../models/category');
               return res.status(404).json({ message: 'User not found' });
           }
 
-          if (req.body.email && req.body.email !== user.email) {
-              const emailExists = await mainUser.findOne({ email: req.body.email.trim().toLowerCase() });
+          const updates = req.body || {};
+          if (updates.email && updates.email !== user.email) {
+              if (typeof updates.email !== 'string') {
+                  return res.status(400).json({ message: 'Enter a valid email address' });
+              }
+              const normalizedEmail = updates.email.trim().toLowerCase();
+              if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+                  return res.status(400).json({ message: 'Enter a valid email address' });
+              }
+              const emailExists = await mainUser.findOne({ email: normalizedEmail });
               if (emailExists) {
                   return res.status(400).json({ message: 'Email already in use' });
               }
-              user.email = req.body.email.trim().toLowerCase();
+              user.email = normalizedEmail;
           }
 
-          user.firstName = req.body.firstName || user.firstName;
-          user.lastName = req.body.lastName || user.lastName;
-          user.phone = req.body.phone || user.phone;
-          user.address = req.body.address || user.address;
+          if (updates.firstName !== undefined) {
+              if (typeof updates.firstName !== 'string' || !updates.firstName.trim()) {
+                  return res.status(400).json({ message: 'First name cannot be empty' });
+              }
+              user.firstName = updates.firstName.trim();
+          }
+          if (updates.lastName !== undefined) {
+              if (typeof updates.lastName !== 'string' || !updates.lastName.trim()) {
+                  return res.status(400).json({ message: 'Last name cannot be empty' });
+              }
+              user.lastName = updates.lastName.trim();
+          }
+          if (typeof updates.phone === 'string') user.phone = updates.phone.trim();
+          if (typeof updates.address === 'string') user.address = updates.address.trim();
 
           const updatedUser = await user.save();
           res.status(200).json({
@@ -222,15 +242,15 @@ const Category = require('../models/category');
           });
       } catch (error) {
           console.error("Update User Error:", error);
-          res.status(500).json({ message: 'Error updating user profile', error: error.message });
+          res.status(500).json({ message: 'Error updating user profile' });
       }
    };
 
    const changePassword = async (req, res) => {
       try {
-          const { oldPassword, password } = req.body;
-          if (!oldPassword || !password) {
-              return res.status(400).json({ message: "Old and new passwords are required" });
+          const { oldPassword, password } = req.body || {};
+          if (typeof oldPassword !== 'string' || !oldPassword || typeof password !== 'string' || password.length < 6) {
+              return res.status(400).json({ message: "Enter your old password and a new password of at least 6 characters" });
           }
 
           const user = await mainUser.findById(req.user.id);
@@ -255,10 +275,13 @@ const Category = require('../models/category');
    };
    const forgotPassword = async (req, res) => {
       try {
-          const { email } = req.body;
-          const user = await mainUser.findOne({ email });
+          const { email } = req.body || {};
+          if (typeof email !== 'string' || !email.trim()) {
+              return res.status(400).json({ message: 'A valid email is required' });
+          }
+          const user = await mainUser.findOne({ email: email.trim().toLowerCase() });
           if (!user) {
-              return res.status(400).send('user does not exist');
+              return res.status(200).json({ success: true, message: 'If an account exists for that email, a reset link has been sent' });
           }
 
           // Delete any existing token
@@ -276,10 +299,13 @@ const Category = require('../models/category');
               expiresAt: Date.now() + 30 * (60 * 1000)  // 30 minutes
           }).save();
 
-          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-          const resetUrl = `${frontendUrl}#/reset-password/:resetToken${resetToken}`;
+          const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+          const resetUrl = `${frontendUrl}/#/reset-password/${resetToken}`;
+          const escapedFirstName = String(user.firstName).replace(/[&<>"']/g, (character) => ({
+              '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+          })[character]);
           const message = `
-          <h2>Hello ${user.firstName}</h2>
+          <h2>Hello ${escapedFirstName}</h2>
           <p>please use the url below to reset your password</p>
           <p>this reset link is valid for 30 minutes only</p>
           <a href=${resetUrl} clicktracking=off>${resetUrl}</a>
@@ -299,8 +325,11 @@ const Category = require('../models/category');
 
    const resetPassword = async (req, res) => {
       try {
-          const { password } = req.body;
+          const { password } = req.body || {};
           const { resetToken } = req.params;
+          if (typeof password !== 'string' || password.length < 6) {
+              return res.status(400).json({ message: 'Password must be at least 6 characters' });
+          }
           const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
 
           const userToken = await Token.findOne({

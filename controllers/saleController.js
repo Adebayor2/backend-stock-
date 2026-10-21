@@ -3,41 +3,43 @@ const Product = require('../models/product');
 
 const createSale = async (req, res) => {
     try {
-        const { productId } = req.body;
-        console.log("Sale attempt for product:", productId);
-        console.log("User from token:", req.user);
+        const { productId } = req.body || {};
+        if (typeof productId !== 'string' || !productId.match(/^[a-f\d]{24}$/i)) {
+            return res.status(400).json({ message: 'A valid product ID is required' });
+        }
 
-        const product = await Product.findById(productId);
-
-        if (!product) {
-            console.log("Product not found:", productId);
+        const productExists = await Product.exists({ _id: productId });
+        if (!productExists) {
             return res.status(404).json({ message: 'Product not found' });
         }
 
-        if (product.stock <= 0) {
+        const product = await Product.findOneAndUpdate(
+            { _id: productId, stock: { $gt: 0 } },
+            { $inc: { stock: -1 } },
+            { new: true }
+        );
+        if (!product) {
             return res.status(400).json({ message: 'Product out of stock' });
         }
 
-        // Create the sale record
-        const sale = new Sale({
-            product: product._id,
-            productName: product.name,
-            price: product.price,
-            user: req.user.id || req.user._id,
-            date: new Date()
-        });
+        let sale;
+        try {
+            sale = await Sale.create({
+                product: product._id,
+                productName: product.name,
+                price: product.price,
+                user: req.user.id,
+                date: new Date()
+            });
+        } catch (error) {
+            await Product.updateOne({ _id: product._id }, { $inc: { stock: 1 } });
+            throw error;
+        }
 
-        await sale.save();
-
-        // Decrement product stock
-        product.stock -= 1;
-        await product.save();
-
-        console.log("Sale recorded successfully for:", product.name);
         res.status(201).json({ message: 'Sale recorded successfully', sale, product });
     } catch (error) {
         console.error('Error creating sale:', error);
-        res.status(500).json({ message: 'Internal server error', error: error.message });
+        res.status(500).json({ message: 'Internal server error' });
     }
 };
 
@@ -48,14 +50,14 @@ const getSales = async (req, res) => {
         res.status(200).json(sales);
     } catch (error) {
         console.error('Error fetching sales:', error);
-        res.status(500).json({ message: 'Internal server error', error: error.message });
+        res.status(500).json({ message: 'Internal server error' });
     }
 };
 
 const getRevenueStats = async (req, res) => {
     try {
         const userId = req.user.id || req.user._id;
-        const sales = await Sale.find({ user: userId });
+        const sales = await Sale.find({ user: userId }).sort({ date: -1 });
         
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
@@ -76,18 +78,18 @@ const getRevenueStats = async (req, res) => {
             monthlyRevenue,
             totalSales,
             averageOrderValue,
-            recentSales: sales.slice(-10).reverse()
+            recentSales: sales.slice(0, 10)
         });
     } catch (error) {
         console.error('Error fetching revenue stats:', error);
-        res.status(500).json({ message: 'Internal server error', error: error.message });
+        res.status(500).json({ message: 'Internal server error' });
     }
 };
 
 const adminGetRevenueStats = async (req, res) => {
     try {
         // Find all sales across all users
-        const sales = await Sale.find().populate('user', 'firstName lastName email');
+        const sales = await Sale.find().populate('user', 'firstName lastName email').sort({ date: -1 });
         
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
@@ -125,11 +127,11 @@ const adminGetRevenueStats = async (req, res) => {
             totalSales,
             totalRevenue,
             revenuePerUser: Object.values(revenuePerUser),
-            recentSales: sales.slice(-20).reverse()
+            recentSales: sales.slice(0, 20)
         });
     } catch (error) {
         console.error('Error fetching admin revenue stats:', error);
-        res.status(500).json({ message: 'Internal server error', error: error.message });
+        res.status(500).json({ message: 'Internal server error' });
     }
 };
 

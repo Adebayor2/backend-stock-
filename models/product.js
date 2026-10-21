@@ -13,11 +13,17 @@ const productSchema = new mongoose.Schema({
     },
     price: {
         type: Number,
-        required: [true, "Please add a price"]
+        required: [true, "Please add a price"],
+        min: [0.01, "Price must be greater than zero"]
     },
     stock: {
         type: Number,
-        required: [true, "Please add stock quantity"]
+        required: [true, "Please add stock quantity"],
+        min: [0, "Stock cannot be negative"],
+        validate: {
+            validator: Number.isInteger,
+            message: "Stock must be a whole number"
+        }
     },
     tag: {
         type: String,

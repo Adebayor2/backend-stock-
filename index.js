@@ -5,10 +5,16 @@ const dotenv = require ('dotenv')
 const mongoose = require ('mongoose')
 const cookieParser = require ('cookie-parser')
 dotenv.config ()
-const PORT = process.env.PORT
+const PORT = process.env.PORT || 5000
 const URI = process.env.MONGODB_URI
 
-app.use (cors( {origin:[ 'https://stock-manager-cs.vercel.app',]} ))
+const allowedOrigins = [
+    'https://stock-manager-cs.vercel.app',
+    'http://localhost:5173',
+    process.env.FRONTEND_URL
+].filter(Boolean)
+
+app.use(cors({ origin: allowedOrigins }))
 app.use(express.json())
 app.use(cookieParser())
 app.use(express.urlencoded({extended:true}));
@@ -17,14 +23,20 @@ const adminRoute = require('./routes/adminRoute')
 const categoryRoute = require('./routes/categoryRoute')
 const productRoute = require('./routes/productRoute')
 const salesRoute = require('./routes/salesRoute')
-mongoose.connect(URI)
-.then(() => console.log("Connected to MongoDB successfully"))
-.catch((err) => console.error("MongoDB connection error:", err));
-app.listen( PORT, () => {
-    console.log(`server is running on port ${PORT}`)
-});
 app.use("/api",userRoute)
 app.use('/api/admin', adminRoute);
 app.use('/api/categories', categoryRoute);
 app.use('/api/products', productRoute);
 app.use('/api/sales', salesRoute);
+
+mongoose.connect(URI)
+    .then(() => {
+        console.log("Connected to MongoDB successfully")
+        app.listen(PORT, () => {
+            console.log(`server is running on port ${PORT}`)
+        })
+    })
+    .catch((err) => {
+        console.error("MongoDB connection error:", err)
+        process.exitCode = 1
+    })
